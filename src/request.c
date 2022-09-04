@@ -159,6 +159,7 @@ void request_handle(int fd) {
     request_read_headers(fd);
     
     is_static = request_parse_uri(uri, filename, cgiargs);
+    printf("FILENAME: %s\n",filename);
     if (stat(filename, &sbuf) < 0) {
 	request_error(fd, filename, "404", "Not found", "server could not find this file");
 	return;

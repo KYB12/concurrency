@@ -35,6 +35,7 @@ void client_send(int fd, char *filename) {
     /* Form and send the HTTP request */
     sprintf(buf, "GET %s HTTP/1.1\n", filename);
     sprintf(buf, "%shost: %s\n\r\n", buf, hostname);
+    printf("%s",buf);
     write_or_die(fd, buf, strlen(buf));
 }
 
