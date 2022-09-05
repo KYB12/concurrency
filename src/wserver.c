@@ -5,7 +5,6 @@
 
 char default_root[] = ".";
 
-
 //Implemented producer and consumer functions
 pthread_cond_t emptyBuffer = PTHREAD_COND_INITIALIZER;
 pthread_cond_t fullBuffer = PTHREAD_COND_INITIALIZER;
@@ -19,46 +18,50 @@ int post = 0;
 int get = 0;
 
 void *producer(void *arg){
-	printf("we made it");
 	int listen_fd = *((int *) arg);
 	while(1){
+		//printf("buffers: %i\n", buffers);
 		pthread_mutex_lock(&lock);
-		while(curBuf == (buffers-1)){
+		while(curBuf == buffers){
 			//Wait for buffer to be empty
 			pthread_cond_wait(&emptyBuffer,&lock);
 		}
 		struct sockaddr_in client_addr;
 		int client_len = sizeof(client_addr);
 		int conn_fd = accept_or_die(listen_fd, (sockaddr_t *) &client_addr, (socklen_t *) &client_len);
+		//printf("accepted file %i\n", conn_fd);
 		buffer[post] = conn_fd;  
 		post = (post + 1)%buffers;
 		curBuf += 1;
 		//there is something in the buffer for consumer to pull now
 		pthread_cond_signal(&fullBuffer);
+		//printf("signaled from producer\n");
 		//unlock
-		pthread_mutex_lock(&lock);
+		pthread_mutex_unlock(&lock);
 	}
 }
 
 void *consumer(void *arg){
+	//printf("created consumer %i\n", *((int *)arg));
 	while(1){
 		pthread_mutex_lock(&lock);
 		while(curBuf == 0){
+			printf("consumer %i sleep\n",*((int *)arg));
 			//wait until buffer is full again
 			pthread_cond_wait(&fullBuffer,&lock);
 		}
+		printf("waked consumer %i\n",*((int *)arg));
 		int conn_fd = buffer[get];
 		request_handle(conn_fd);
 		get = (get + 1) % buffers;
 		curBuf -= 1;
 		close_or_die(conn_fd);
 		pthread_cond_signal(&emptyBuffer);
-		pthread_mutex_lock(&lock);
+		pthread_mutex_unlock(&lock);
 	}
 }
 
 int main(int argc, char *argv[]) {
-		printf("BEFORE PRODUCER");
     int c;
     char *root_dir = default_root;
     int port = 10000;
@@ -96,11 +99,10 @@ int main(int argc, char *argv[]) {
 		int listen_fd = open_listen_fd_or_die(port);
 		pthread_t producerID, consumersID[threads];
 		pthread_create(&producerID,NULL,producer,&listen_fd);
-		printf("MADE PRODUCER");
 		int i;
+		int array[6] ={1,2,3,4,5,6};
 		for(i = 0; i < threads; i++){
-			printf("MADE Consumer %i", i);
-			pthread_create(&consumersID[i], NULL, consumer, NULL);
+			pthread_create(&consumersID[i], NULL, consumer, &array[i]);
 		}
 		//only wait for producer since none of the consumers have a termination condition
 		pthread_join(producerID, NULL);
