@@ -20,8 +20,13 @@
 //
 
 #include "io_helper.h"
+#include <time.h>
+#include <stdlib.h>
+#include <pthread.h>
 
 #define MAXBUF (8192)
+char *filenames[4] = {"/index.html", "/acceptman.html","/man.html","/statman.html"};
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
 //
 // Send an HTTP request for the specified file 
@@ -67,27 +72,64 @@ void client_print(int fd) {
     }
 }
 
-int main(int argc, char *argv[]) {
-    char *host, *filename;
+typedef struct{
+    char host[100];
     int port;
-    int clientfd;
-    
-    if (argc != 4) {
-	fprintf(stderr, "Usage: %s <host> <port> <filename>\n", argv[0]);
-	exit(1);
-    }
-    
-    host = argv[1];
-    port = atoi(argv[2]);
-    filename = argv[3];
-    
-    /* Open a single connection to the specified host and port */
-    clientfd = open_client_fd_or_die(host, port);
-    
+} clientArgs;
+
+void *client(void *arg){
+    pthread_mutex_lock(&lock);
+    clientArgs *args = (clientArgs*) arg; 
+    char* host = (*args).host;
+    int port = (*args).port;
+    int clientfd = open_client_fd_or_die(host, port);
+    //get random file
+    int r = rand() % 4;
+    char *filename = filenames[r];
     client_send(clientfd, filename);
     client_print(clientfd);
-    
     close_or_die(clientfd);
+    pthread_mutex_unlock(&lock);
+    return NULL;
+}
+
+
+//edited main function to send mutliple requets at once by implementing the client function
+int main(int argc, char *argv[]) {
+    char *host; //*filename;
+    int port;
+    //int clientfd;
+    
+//    if (argc != 4) {
+//	fprintf(stderr, "Usage: %s <host> <port> <filename>\n", argv[0]);
+//	exit(1);
+//    }
+    
+    if (argc != 4) {
+        fprintf(stderr, "Usage: %s <host> <port> <loops>\n", argv[0]);
+        exit(1);
+    }
+
+    host = argv[1];
+    port = atoi(argv[2]);
+    int loops = atoi(argv[3]);
+    
+    /* Open a single connection to the specified host and port */
+
+    pthread_t threads[loops];
+    clientArgs args;
+    strcpy(args.host, host);
+    args.port = port;
+
+    int i;
+    for(i = 0; i < loops; i++){
+        pthread_create(&threads[i], NULL,client,&args);
+    }
+    //wait for all the threads to finish
+    int j;
+    for(j= 0; j < loops; j++){
+        pthread_join(threads[j], NULL);
+    }
     
     exit(0);
 }

@@ -21,21 +21,23 @@ void *producer(void *arg){
 	int listen_fd = *((int *) arg);
 	while(1){
 		//printf("buffers: %i\n", buffers);
+		struct sockaddr_in client_addr;
+		int client_len = sizeof(client_addr);
+		int conn_fd = accept_or_die(listen_fd, (sockaddr_t *) &client_addr, (socklen_t *) &client_len);
 		pthread_mutex_lock(&lock);
 		while(curBuf == buffers){
 			//Wait for buffer to be empty
 			pthread_cond_wait(&emptyBuffer,&lock);
 		}
-		struct sockaddr_in client_addr;
-		int client_len = sizeof(client_addr);
-		int conn_fd = accept_or_die(listen_fd, (sockaddr_t *) &client_addr, (socklen_t *) &client_len);
-		//printf("accepted file %i\n", conn_fd);
-		buffer[post] = conn_fd;  
-		post = (post + 1)%buffers;
-		curBuf += 1;
+		if(conn_fd > 0){
+			printf("accepted file %i\n", conn_fd);
+			buffer[post] = conn_fd;  
+			post = (post + 1)%buffers;
+			curBuf += 1;
+			pthread_cond_signal(&fullBuffer);
+			printf("signaled from producer\n");
+		}
 		//there is something in the buffer for consumer to pull now
-		pthread_cond_signal(&fullBuffer);
-		//printf("signaled from producer\n");
 		//unlock
 		pthread_mutex_unlock(&lock);
 	}
@@ -98,14 +100,17 @@ int main(int argc, char *argv[]) {
     // now, get to work
 		int listen_fd = open_listen_fd_or_die(port);
 		pthread_t producerID, consumersID[threads];
-		pthread_create(&producerID,NULL,producer,&listen_fd);
 		int i;
 		int array[6] ={1,2,3,4,5,6};
 		for(i = 0; i < threads; i++){
 			pthread_create(&consumersID[i], NULL, consumer, &array[i]);
 		}
+		pthread_create(&producerID,NULL,producer,&listen_fd);
 		//only wait for producer since none of the consumers have a termination condition
 		pthread_join(producerID, NULL);
+		for(i = 0; i < threads; i++){
+			pthread_join(consumersID[i],NULL);
+		}
     return 0;
 }
 
